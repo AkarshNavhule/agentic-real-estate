@@ -36,7 +36,6 @@ jobs:
       run: |
         docker build ./frontend -t ${{ env.REGISTRY_NAME }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }} -t ${{ env.REGISTRY_NAME }}/${{ env.FRONTEND_IMAGE }}:latest
         docker push ${{ env.REGISTRY_NAME }}/${{ env.FRONTEND_IMAGE }} --all-tags
-# ... (Your existing build and push steps are above this) ...
 
     - name: Log into Azure CLI
       uses: azure/login@v1
@@ -44,19 +43,19 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Update Backend Container App
-      uses: azure/CLI@v1
+      uses: azure/cli@v1
       with:
         inlineScript: |
           az containerapp update \
             --name agentic-backend-app \
             --resource-group agentic-rg \
-            --image ${{ env.REGISTRY_NAME }}/${{ env.BACKEND_IMAGE }}:latest
+            --image ${{ env.REGISTRY_NAME }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
 
     - name: Update Frontend Container App
-      uses: azure/CLI@v1
+      uses: azure/cli@v1
       with:
         inlineScript: |
           az containerapp update \
             --name agentic-frontend-app \
             --resource-group agentic-rg \
-            --image ${{ env.REGISTRY_NAME }}/${{ env.FRONTEND_IMAGE }}:latest
+            --image ${{ env.REGISTRY_NAME }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
