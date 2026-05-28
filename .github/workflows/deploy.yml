@@ -8,7 +8,7 @@ on:
 
 # Define the environment variables (You will set these in GitHub Secrets)
 env:
-  REGISTRY_NAME: YOUR_ACR_NAME.azurecr.io
+  REGISTRY_NAME: agenticacr2026.azurecr.io
   BACKEND_IMAGE: agentic-backend
   FRONTEND_IMAGE: agentic-frontend
 
