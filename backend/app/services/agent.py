@@ -2,66 +2,103 @@ from semantic_kernel import Kernel
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, AzureChatPromptExecutionSettings
 from semantic_kernel.connectors.ai.function_choice_behavior import FunctionChoiceBehavior
 from semantic_kernel.functions import KernelArguments
-
+from typing import AsyncGenerator
 from app.mcp.tools import PropertyManagementPlugin
 from app.services.search import retrieve_property_context
 from app.core.config import settings
 
-conversation_memory = {}
+# Shared in-memory conversation store
+conversation_memory: dict[str, list[str]] = {}
 
-async def ask_real_estate_agent(user_query: str , session_id: str) -> str:
-    # 1. Initialize the Kernel
+PROMPT_TEMPLATE = """
+You are an elite AI Real Estate Assistant. 
+Use ONLY the following property information to answer the user's question. 
+If the answer is not in the information below, say "I don't have information on that."
+
+CONVERSATION HISTORY:
+{{$history}}
+
+PROPERTY INFORMATION:
+{{$context}}
+
+USER QUESTION: 
+{{$query}}
+"""
+
+def _build_kernel() -> Kernel:
+    """Shared kernel factory reused by both agent functions."""
     kernel = Kernel()
-
-    # 2. Add the Azure OpenAI Chat Service
-    chat_service = AzureChatCompletion(
+    kernel.add_service(AzureChatCompletion(
         deployment_name=settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
         endpoint=settings.AZURE_OPENAI_CHAT_ENDPOINT,
         api_key=settings.AZURE_OPENAI_CHAT_KEY,
         api_version="2024-02-01"
-    )
-    kernel.add_service(chat_service)
-
+    ))
     kernel.add_plugin(PropertyManagementPlugin(), plugin_name="CRM")
+    return kernel
 
-    # 3. Fetch relevant data from your Azure Search database
+def _get_history(session_id: str) -> str:
+    """Returns formatted conversation history for a session."""
+    return "\n".join(conversation_memory.get(session_id, []))
+
+def _save_to_memory(session_id: str, user_query: str, response: str):
+    """Appends the latest turn to memory and trims to last 6 messages."""
+    if session_id not in conversation_memory:
+        conversation_memory[session_id] = []
+    conversation_memory[session_id].append(f"User: {user_query}")
+    conversation_memory[session_id].append(f"Assistant: {response}")
+    # Keep only last 6 messages to avoid token overflow
+    conversation_memory[session_id] = conversation_memory[session_id][-6:]
+
+
+async def ask_real_estate_agent(user_query: str, session_id: str) -> str:
+    kernel = _build_kernel()
     property_context = await retrieve_property_context(user_query)
 
-    # 4. Execution settings — note the correct parameter name
     execution_settings = AzureChatPromptExecutionSettings(
         function_choice_behavior=FunctionChoiceBehavior.Auto()
     )
-    if session_id not in conversation_memory:
-        conversation_memory[session_id] = []
-
-    history_text = "\n".join(conversation_memory[session_id])
-
-    # 5. Create the System Prompt
-    prompt_template = """
-    You are an elite AI Real Estate Assistant. 
-    Use ONLY the following property information to answer the user's question. 
-    If the answer is not in the information below, say "I don't have information on that."
-
-    PROPERTY INFORMATION:
-    {{$context}}
-
-    USER QUESTION: 
-    {{$query}}
-    """
-
-    # 6. Execute the prompt
     arguments = KernelArguments(
         settings=execution_settings,
         context=property_context,
-        history=history_text,
+        history=_get_history(session_id),
         query=user_query
     )
-    response = await kernel.invoke_prompt(prompt_template, arguments=arguments)
 
-    conversation_memory[session_id].append(f"User: {user_query}")
-    conversation_memory[session_id].append(f"Assistant: {str(response)}")
+    response = await kernel.invoke_prompt(PROMPT_TEMPLATE, arguments=arguments)
+    response_text = str(response)
 
-    # Optional: Keep only the last 6 messages so we don't hit token limits!
-    conversation_memory[session_id] = conversation_memory[session_id][-6:]
+    _save_to_memory(session_id, user_query, response_text)
 
-    return str(response)
+    return response_text
+
+
+async def ask_real_estate_agent_stream(
+    user_query: str,
+    session_id: str
+) -> AsyncGenerator[str, None]:
+    kernel = _build_kernel()
+    property_context = await retrieve_property_context(user_query)
+
+    execution_settings = AzureChatPromptExecutionSettings(
+        function_choice_behavior=FunctionChoiceBehavior.Auto()
+    )
+    arguments = KernelArguments(
+        settings=execution_settings,
+        context=property_context,
+        history=_get_history(session_id),
+        query=user_query
+    )
+
+    full_response = ""
+
+    async for chunk in kernel.invoke_prompt_stream(PROMPT_TEMPLATE, arguments=arguments):
+        token = str(chunk[0])
+        if token:
+            full_response += token
+            yield f"data: {token}\n\n"   # SSE format
+
+    # Signal end of stream to the client
+    yield "data: [DONE]\n\n"
+
+    _save_to_memory(session_id, user_query, full_response)
