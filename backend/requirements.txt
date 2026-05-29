@@ -2,3 +2,6 @@ fastapi
 uvicorn
 pydantic
 pydantic-settings
+openai
+azure-search-documents
+semantic-kernel
