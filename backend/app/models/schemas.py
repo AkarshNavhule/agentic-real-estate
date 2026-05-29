@@ -10,4 +10,5 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
 
     reply: str
+    session_id: str
     source_used: List[str] = []

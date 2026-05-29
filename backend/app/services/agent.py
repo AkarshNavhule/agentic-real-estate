@@ -7,7 +7,9 @@ from app.mcp.tools import PropertyManagementPlugin
 from app.services.search import retrieve_property_context
 from app.core.config import settings
 
-async def ask_real_estate_agent(user_query: str) -> str:
+conversation_memory = {}
+
+async def ask_real_estate_agent(user_query: str , session_id: str) -> str:
     # 1. Initialize the Kernel
     kernel = Kernel()
 
@@ -27,8 +29,12 @@ async def ask_real_estate_agent(user_query: str) -> str:
 
     # 4. Execution settings — note the correct parameter name
     execution_settings = AzureChatPromptExecutionSettings(
-        function_choice_behavior=FunctionChoiceBehavior.Auto()  # ✅ Fixed
+        function_choice_behavior=FunctionChoiceBehavior.Auto()
     )
+    if session_id not in conversation_memory:
+        conversation_memory[session_id] = []
+
+    history_text = "\n".join(conversation_memory[session_id])
 
     # 5. Create the System Prompt
     prompt_template = """
@@ -47,8 +53,15 @@ async def ask_real_estate_agent(user_query: str) -> str:
     arguments = KernelArguments(
         settings=execution_settings,
         context=property_context,
+        history=history_text,
         query=user_query
     )
     response = await kernel.invoke_prompt(prompt_template, arguments=arguments)
+
+    conversation_memory[session_id].append(f"User: {user_query}")
+    conversation_memory[session_id].append(f"Assistant: {str(response)}")
+
+    # Optional: Keep only the last 6 messages so we don't hit token limits!
+    conversation_memory[session_id] = conversation_memory[session_id][-6:]
 
     return str(response)
