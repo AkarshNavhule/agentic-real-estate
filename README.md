@@ -8,6 +8,8 @@ An enterprise-grade, full-stack AI Real Estate Assistant built using **FastAPI**
 
 The system is split into an asynchronous Python backend and a reactive single-page frontend:
 
+Link : https://agentic-frontend-app.whiteforest-532c28d0.southindia.azurecontainerapps.io/
+
 ### 1. Backend AI Engine (FastAPI & Semantic Kernel)
 * **Orchestration Engine:** Powered by Microsoft Semantic Kernel to manage structured prompts, execution settings, and multi-agent native function execution.
 * **Hybrid RAG Architecture:** Vector and keyword indexing via Azure AI Search to pull rich, factual property context matching user queries.
