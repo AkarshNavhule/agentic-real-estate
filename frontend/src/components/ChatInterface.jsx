@@ -82,7 +82,7 @@ export default function ChatInterface() {
       {/* Header */}
       <div className="bg-slate-800 p-4 text-white flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold tracking-wide">Malnad Realty AI Agent</h1>
+          <h1 className="text-xl font-bold tracking-wide">REAL ESTATE AI CHATBOT</h1>
           <p className="text-xs text-slate-400">RAG + SQLite Plugin Enabled</p>
         </div>
 
